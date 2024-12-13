@@ -6,8 +6,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -62,11 +64,22 @@ as only that user has permission to list references.
 		sum   int64
 		items []refInfo
 	)
+
+	eofErrors := 0
 	for {
 		b, _, _, err := store.Get(upspin.ListRefsMetadata + upspin.Reference(token))
 		if err != nil {
-			s.Exit(err)
-			return
+			if err == io.EOF {
+				eofErrors++
+				if eofErrors > 10 {
+					s.Exit(errors.Join(err, fmt.Errorf("got %d io.EOF errors, stopping", eofErrors)))
+					return
+				}
+				continue
+			} else {
+				s.Exit(err)
+				return
+			}
 		}
 		var refs upspin.ListRefsResponse
 		err = json.Unmarshal(b, &refs)
